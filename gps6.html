@@ -50,6 +50,44 @@
     flex-shrink: 0;
   }
 
+  /* Slide-down menu */
+  #menu {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 3.0rem);
+    left: 0;
+    right: 0;
+    z-index: 950;
+    background: #181818;
+    border-bottom: 1px solid #333;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    padding: 0.4rem 0.5rem;
+    transform: translateY(-150%);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform .25s ease, opacity .25s ease, visibility .25s;
+  }
+  #menu.open {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+  #menu button {
+    padding: 0.45rem 0.7rem;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 6px;
+    color: #eee;
+    cursor: pointer;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  #menu button:active { background: #333; }
+
   #map {
     flex: 1;
     width: 100%;
@@ -59,7 +97,7 @@
   /* GPS status chip */
   #status {
     position: fixed;
-    top: 3.2rem;
+    top: calc(env(safe-area-inset-top, 0px) + 3.2rem + var(--menu-h, 0px));
     left: 0.6rem;
     background: rgba(0,0,0,0.75);
     border: 1px solid #333;
@@ -72,12 +110,13 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     pointer-events: none;
+    transition: top .25s ease;
   }
 
   /* Destination chip */
   #dest-chip {
     position: fixed;
-    top: 4.6rem;
+    top: calc(env(safe-area-inset-top, 0px) + 4.6rem + var(--menu-h, 0px));
     left: 0.6rem;
     right: 0.6rem;
     background: rgba(0,0,0,0.8);
@@ -89,6 +128,7 @@
     align-items: center;
     gap: 0.5rem;
     z-index: 1400;
+    transition: top .25s ease;
   }
   #dest-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #dest-chip button {
@@ -156,6 +196,33 @@
   #search-results div small { color: #999; display: block; font-size: 0.75rem; }
   #search-results div:last-child { border-bottom: none; }
   #search-results div:hover { background: #222; }
+
+  /* POI category bar */
+  #poi-bar {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 3.4rem + var(--menu-h, 0px));
+    left: 0.6rem;
+    right: 0.6rem;
+    display: none;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    z-index: 1500;
+    -webkit-overflow-scrolling: touch;
+  }
+  #poi-bar.on { display: flex; }
+  #poi-bar button {
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.78);
+    border: 1px solid #444;
+    color: #eee;
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #poi-bar button:active { background: #333; }
 
   /* User arrow marker */
   .user-wrap { background: none !important; border: none !important; }
@@ -334,20 +401,38 @@
 <body>
 
 <header>
+  <button id="menuBtn" title="Menu">☰</button>
   <input id="search" placeholder="Search city, street, place…" autocomplete="off">
   <button id="clearBtn" title="Clear search">✕</button>
+</header>
+
+<div id="menu">
   <button id="viewBtn" title="Toggle 3D nav view">🧭 3D</button>
   <button id="ttsBtn" title="Voice guidance">🔊</button>
   <button id="modeBtn" title="Transport mode">🚗</button>
   <button id="prefBtn" title="Route preference">⭐</button>
+  <button id="poiBtn" title="Nearby points of interest">🏪</button>
   <div id="heading-chip"><span id="heading-arrow">⬆</span><span id="heading-text">0°</span></div>
-</header>
+</div>
 
 <div id="map"></div>
 
 <div id="status">📍 Starting GPS…</div>
 <div id="dest-chip"><span id="dest-label"></span><button id="clearDest" title="Remove destination">✕</button></div>
 <div id="search-results"></div>
+
+<div id="poi-bar">
+  <button data-tag="food">🍔 Food</button>
+  <button data-tag="coffee">☕ Coffee</button>
+  <button data-tag="fuel">⛽ Fuel</button>
+  <button data-tag="hotel">🏨 Hotel</button>
+  <button data-tag="parking">🅿️ Parking</button>
+  <button data-tag="pharmacy">💊 Pharmacy</button>
+  <button data-tag="hospital">🏥 Hospital</button>
+  <button data-tag="shop">🛒 Shops</button>
+  <button data-tag="atm">🏧 ATM</button>
+  <button data-tag="sight">🏛️ Sight</button>
+</div>
 
 <div id="controls">
   <button id="locBtn">📍<br><small>Follow</small></button>
@@ -514,6 +599,29 @@ locBtn.onclick=()=>{
 };
 locBtn.classList.add("on");
 
+/* ================= slide-down menu ================= */
+const menuEl=document.getElementById("menu");
+const menuBtn=document.getElementById("menuBtn");
+function updateMenuOffset(){
+  document.documentElement.style.setProperty(
+    "--menu-h",
+    menuEl.classList.contains("open") ? menuEl.offsetHeight+"px" : "0px"
+  );
+}
+function closeMenu(){
+  menuEl.classList.remove("open");
+  menuBtn.classList.remove("on");
+  updateMenuOffset();
+  closePoiBar();
+}
+menuBtn.onclick=()=>{
+  menuEl.classList.toggle("open");
+  menuBtn.classList.toggle("on");
+  updateMenuOffset();
+  closePoiBar();
+};
+window.addEventListener("resize", updateMenuOffset);
+
 /* ================= search ================= */
 const searchInput=document.getElementById("search");
 const resultsEl=document.getElementById("search-results");
@@ -522,6 +630,8 @@ let searchTimer=null;
 searchInput.oninput=()=>{
   const q=searchInput.value.trim();
   clearTimeout(searchTimer);
+  closeMenu();
+  closePoiBar();
   if(!q){ resultsEl.style.display="none"; return; }
   searchTimer=setTimeout(()=>doSearch(q),500);
 };
@@ -552,6 +662,13 @@ async function doSearch(q){
       });
     }
     resultsEl.innerHTML="";
+    if(!f.length && loc){
+      const pois=await fetchPOIsByName(q, loc[0], loc[1]);
+      if(pois.length){
+        showPOIResults(pois, loc[0], loc[1], `Results for “${q}”`);
+        return;
+      }
+    }
     f.slice(0,8).forEach(x=>{
       const p=x.properties||{};
       const name=p.name||p.street||p.housenumber||"";
@@ -579,6 +696,123 @@ function escapeHtml(s){
 document.addEventListener("click",e=>{
   if(!resultsEl.contains(e.target) && e.target!==searchInput)
     resultsEl.style.display="none";
+});
+
+/* ================= POI search ================= */
+const poiBar=document.getElementById("poi-bar");
+const poiBtn=document.getElementById("poiBtn");
+const statusEl=document.getElementById("status");
+const POI_TAGS={
+  food:"amenity~\"restaurant|cafe|fast_food|bar|pub\"",
+  coffee:"amenity=cafe",
+  fuel:"amenity=fuel",
+  hotel:"tourism=hotel",
+  parking:"amenity=parking",
+  pharmacy:"amenity=pharmacy",
+  hospital:"amenity=hospital",
+  shop:"shop",
+  atm:"amenity=atm",
+  sight:"tourism"
+};
+const POI_ENDPOINTS=[
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.osm.jp/api/interpreter"
+];
+
+function closePoiBar(){
+  poiBar.classList.remove("on");
+  poiBtn.classList.remove("on");
+  resultsEl.style.top="";
+  statusEl.style.display="block";
+}
+function openPoiBar(){
+  poiBar.classList.add("on");
+  poiBtn.classList.add("on");
+  resultsEl.style.top="5.1rem";
+  statusEl.style.display="none";
+}
+poiBtn.onclick=()=>{
+  closeMenu();
+  if(poiBar.classList.contains("on")){ closePoiBar(); return; }
+  openPoiBar();
+};
+
+async function overpassQuery(q){
+  for(const ep of POI_ENDPOINTS){
+    try{
+      const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),signal:AbortSignal.timeout(20000)});
+      if(!r.ok) continue;
+      const j=await r.json();
+      if(j.elements && j.elements.length) return j.elements;
+    }catch(e){}
+  }
+  return [];
+}
+function escReg(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
+
+async function fetchPOIsByTag(tag,lat,lon){
+  return overpassQuery(
+    `[out:json][timeout:20];(node[${tag}](around:4000,${lat},${lon});`+
+    `way[${tag}](around:4000,${lat},${lon});relation[${tag}](around:4000,${lat},${lon}););out center 25;`
+  );
+}
+async function fetchPOIsByName(name,lat,lon){
+  const esc=escReg(name);
+  return overpassQuery(
+    `[out:json][timeout:20];(node["name"~"${esc}",i](around:5000,${lat},${lon});`+
+    `way["name"~"${esc}",i](around:5000,${lat},${lon}););out center 20;`
+  );
+}
+
+function showPOIResults(elements,lat,lon,title){
+  resultsEl.innerHTML="";
+  const rows=[];
+  for(const e of elements){
+    const plat=e.lat!=null?e.lat:(e.center?e.center.lat:null);
+    const plon=e.lon!=null?e.lon:(e.center?e.center.lon:null);
+    if(plat==null||plon==null) continue;
+    const t=e.tags||{};
+    const name=t.name||t["name:en"]||"Unnamed";
+    const kind=t.amenity||t.shop||t.tourism||t.leisure||t.highway||"POI";
+    rows.push({plat,plon,name,kind,d:hav([plat,plon],[lat,lon])});
+  }
+  rows.sort((a,b)=>a.d-b.d);
+  const head=document.createElement("div");
+  head.style.fontWeight="bold";
+  head.innerHTML=escapeHtml(title);
+  resultsEl.appendChild(head);
+  if(!rows.length){
+    const div=document.createElement("div");
+    div.innerHTML="No POIs found nearby";
+    resultsEl.appendChild(div);
+  } else {
+    rows.slice(0,20).forEach(x=>{
+      const div=document.createElement("div");
+      div.innerHTML=`${escapeHtml(x.name)}<small>${escapeHtml(x.kind)} • ${formatDistance(x.d)}</small>`;
+      div.onclick=()=>{
+        setDestination(x.plat,x.plon,x.name);
+        resultsEl.style.display="none";
+        closePoiBar();
+      };
+      resultsEl.appendChild(div);
+    });
+  }
+  resultsEl.style.display="block";
+}
+
+Array.from(poiBar.querySelectorAll("button")).forEach(b=>{
+  b.onclick=async ()=>{
+    const tag=POI_TAGS[b.dataset.tag];
+    if(!tag) return;
+    if(!lastPos){ toast("Waiting for GPS fix…"); return; }
+    closePoiBar();
+    resultsEl.style.display="none";
+    toast("Searching nearby…");
+    const elements=await fetchPOIsByTag(tag,lastPos.lat,lastPos.lon);
+    showPOIResults(elements,lastPos.lat,lastPos.lon,b.textContent+" nearby");
+  };
 });
 
 /* ================= destination ================= */
@@ -653,6 +887,81 @@ function getRouters(){
     : ["https://routing.openstreetmap.de/routed-car/route/v1/driving/",
        "https://router.project-osrm.org/route/v1/driving/"];
 }
+
+/* ================= Valhalla fallback (when OSRM is offline) ================= */
+function decodePolyline6(str){
+  const coords=[]; let index=0, lat=0, lon=0, byte, shift, result, i;
+  while(index<str.length){
+    for(i=0;i<2;i++){
+      shift=0; result=0;
+      do{
+        byte=str.charCodeAt(index++)-63;
+        result |= (byte&0x1f)<<shift;
+        shift+=5;
+      }while(byte>=0x20);
+      const delta=(result&1)? ~(result>>1) : (result>>1);
+      if(i===0) lat+=delta; else lon+=delta;
+    }
+    coords.push({lat:lat/1e6, lon:lon/1e6});
+  }
+  return coords;
+}
+function valhallaStepType(vt){
+  if(vt===1) return "depart";
+  if(vt===4||vt===5||vt===6) return "arrive";
+  if(vt===26||vt===27) return "roundabout";
+  if(vt===9) return "slight-right";
+  if(vt===10||vt===11) return "turn-right";
+  if(vt===14||vt===15) return "turn-left";
+  if(vt===16) return "slight-left";
+  return "continue";
+}
+function toOsrmStep(m, shape){
+  const p=shape[m.begin_shape_index]||{lat:0,lon:0};
+  const ba=Number.isFinite(m.bearing_after)?m.bearing_after:null;
+  const bb=Number.isFinite(m.bearing_before)?m.bearing_before:null;
+  const bearings=(bb!=null&&ba!=null)?[(bb+180)%360, ba]:(ba!=null?[ba]:[0]);
+  return {
+    name: (m.street_names&&m.street_names.length)?m.street_names.join(", "):"",
+    distance: Math.max(0,(m.length||0)*1000),
+    duration: Math.max(0,m.time||0),
+    maneuver:{
+      type: valhallaStepType(m.type),
+      instruction: m.instruction||"Continue",
+      location:[p.lon,p.lat],
+      bearing_before: bb,
+      bearing_after: ba
+    },
+    intersections:[{bearings, entry:bearings.map(()=>true)}]
+  };
+}
+function normalizeValhalla(j){
+  const leg=j.trip.legs[0];
+  const shape=decodePolyline6(leg.shape);
+  const steps=leg.maneuvers.map(m=>toOsrmStep(m, shape));
+  return {routes:[{
+    distance: (leg.summary.length||0)*1000,
+    duration: leg.summary.time||0,
+    geometry:{coordinates: shape.map(p=>[p.lon,p.lat])},
+    legs:[{steps}]
+  }]};
+}
+async function fetchValhallaRoute(u,d){
+  const body={
+    locations:[{lat:u.lat,lon:u.lon},{lat:d.lat,lon:d.lon}],
+    costing: transportMode==="foot"?"pedestrian":"auto",
+    directions_options:{units:"kilometers", language:"en-US"}
+  };
+  for(const ep of ["https://valhalla1.openstreetmap.de/route","https://valhalla2.openstreetmap.de/route"]){
+    try{
+      const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
+      if(!r.ok) continue;
+      const x=await r.json();
+      if(x.trip && x.trip.status===0 && x.trip.legs && x.trip.legs.length) return normalizeValhalla(x);
+    }catch(e){}
+  }
+  return null;
+}
 let routeLine=null, activeSegLine=null, routeSteps=[], routeCoords=[], routeActive=false, routeDuration=0, maneuverS=null, arrived=false, remainDistArrived=false;
 
 document.getElementById("routeBtn").onclick=()=>{
@@ -675,6 +984,7 @@ let navView=false;
 const viewBtn=document.getElementById("viewBtn");
 const controlsEl=document.getElementById("controls");
 viewBtn.onclick=()=>{
+  closeMenu();
   if(!routeActive){ toast("Start navigating first"); return; }
   navView=!navView;
   applyNavView();
@@ -698,10 +1008,14 @@ async function startRoute(refit=true, silentBoot=false){
       const url=`${base}${u.lon},${u.lat};${d.lon},${d.lat}?overview=full&steps=true&geometries=geojson&alternatives=true`;
       const r=await fetch(url);
       if(!r.ok){ lastErr=`server ${r.status}`; continue; }
-      j=await r.json();
-      if(j.routes && j.routes.length) break;
-      lastErr=j.message||"no route";
+      const x=await r.json();
+      if(x.routes && x.routes.length){ j=x; break; }
+      lastErr=x.message||"no route";
     }catch(e){ lastErr="network"; }
+  }
+  if(!j || !j.routes || !j.routes.length){
+    j=await fetchValhallaRoute(u,d);
+    if(j) lastErr="osrm offline — valhalla";
   }
   if(!j || !j.routes || !j.routes.length){
     toast(`No route found (${lastErr}). Try a nearby road or street.`);
@@ -1063,7 +1377,7 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
 
   roadSvg.innerHTML=
     `<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">`+
-      `<stop offset="0" stop-color="#16233b"/><stop offset="1" stop-color="#0b1220"/></linearGradient>`+
+      `<stop offset="0" stop-color="#5f83b0"/><stop offset="1" stop-color="#2b3c60"/></linearGradient>`+
       `<linearGradient id="gnd" x1="0" y1="0" x2="0" y2="1">`+
       `<stop offset="0" stop-color="#0c1118"/><stop offset="1" stop-color="#05070a"/></linearGradient></defs>`+
     `<rect x="0" y="0" width="${W}" height="${horizonY.toFixed(1)}" fill="url(#sky)"/>`+
