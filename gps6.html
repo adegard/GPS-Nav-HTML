@@ -300,6 +300,33 @@
     text-align: left;
     pointer-events: none;
     z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+  }
+  #rv-arrow {
+    flex-shrink: 0;
+    width: 4.4rem;
+    height: 4.4rem;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.75);
+    border: 2px solid #ffcc00;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px #000;
+  }
+  #rv-arrow svg {
+    width: 2.6rem;
+    height: 2.6rem;
+    display: block;
+  }
+  #rv-arrow.warn {
+    animation: rvPulse 0.6s infinite alternate;
+  }
+  @keyframes rvPulse {
+    from { border-color: #ffcc00; }
+    to   { border-color: #fff; box-shadow: 0 0 18px #ffcc00; }
   }
   #rv-dist {
     font-size: 2.5rem;
@@ -446,9 +473,12 @@
     <button id="rvToggle" title="Show map">🗺 Map</button>
   </div>
   <div id="rv-top">
-    <div id="rv-dist">…</div>
-    <div id="rv-text">Continue</div>
-    <div id="rv-sub"></div>
+    <div id="rv-arrow"></div>
+    <div id="rv-meta">
+      <div id="rv-dist">…</div>
+      <div id="rv-text">Continue</div>
+      <div id="rv-sub"></div>
+    </div>
   </div>
   <svg id="road-svg"></svg>
   <div id="rv-eta"></div>
@@ -996,6 +1026,7 @@ viewBtn.onclick=()=>{
 async function startRoute(refit=true, silentBoot=false){
   if(!lastPos){ toast("Waiting for GPS fix…"); return; }
   if(!dest){ toast("Set a destination first"); return; }
+  requestWakeLock();
 
   const u=lastPos, d=dest;
   if(hav([u.lat,u.lon],[d.lat,d.lon])<25){
@@ -1080,6 +1111,7 @@ const roadSvg=document.getElementById("road-svg");
 const rvText=document.getElementById("rv-text");
 const rvSub=document.getElementById("rv-sub");
 const rvDist=document.getElementById("rv-dist");
+const rvArrow=document.getElementById("rv-arrow");
 const rvEta=document.getElementById("rv-eta");
 const rvToggle=document.getElementById("rvToggle");
 const rvStop=document.getElementById("rvStop");
@@ -1111,6 +1143,21 @@ function svgIcon(type){
     case "roundabout": return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/></svg>`;
     case "arrive": return `<svg viewBox="0 0 24 24"><path d="M20 6 L9 17 L4 12"/></svg>`;
     default: return `<svg viewBox="0 0 24 24"><path d="M12 18 L12 4 M8 8 L12 4 L16 8"/></svg>`;
+  }
+}
+
+function bigArrow(type){
+  const fill="none", sw=6;
+  const P=d=>`<path d="${d}" fill="${fill}" stroke="#ffcc00" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  switch(type){
+    case "turn-right": return `<svg viewBox="0 0 48 48">${P("M24 5 L24 26 L40 26")}${P("M31 18 L40 26 L31 34")}</svg>`;
+    case "turn-left": return `<svg viewBox="0 0 48 48">${P("M24 5 L24 26 L8 26")}${P("M17 18 L8 26 L17 34")}</svg>`;
+    case "slight-right": return `<svg viewBox="0 0 48 48">${P("M20 5 L25 26 L40 30")}${P("M31 25 L40 30 L33 39")}</svg>`;
+    case "slight-left": return `<svg viewBox="0 0 48 48">${P("M28 5 L23 26 L8 30")}${P("M17 25 L8 30 L15 39")}</svg>`;
+    case "uturn": return `<svg viewBox="0 0 48 48">${P("M32 5 L32 18 A12 12 0 1 0 8 18 L8 34")}${P("M32 11 L39 5 L46 11")}</svg>`;
+    case "roundabout": return `<svg viewBox="0 0 48 48"><circle cx="24" cy="26" r="10" fill="none" stroke="#ffcc00" stroke-width="5"/>${P("M24 12 L24 18")}${P("M20 15 L24 12 L28 15")}</svg>`;
+    case "arrive": return `<svg viewBox="0 0 48 48">${P("M6 24 L18 36 L42 12")}</svg>`;
+    default: return `<svg viewBox="0 0 48 48">${P("M24 5 L24 43")}${P("M15 17 L24 5 L33 17")}</svg>`;
   }
 }
 
@@ -1273,6 +1320,8 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
   rvText.textContent=step.maneuver.instruction || step.name || "Continue";
   rvSub.textContent=step.name||"";
   rvDist.textContent=formatDistance(distToTurn);
+  rvArrow.innerHTML=bigArrow(step.maneuver.type);
+  rvArrow.classList.toggle("warn", distToTurn<100);
 
   const W=roadSvg.clientWidth||360, H=roadSvg.clientHeight||640;
   roadSvg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -1445,15 +1494,22 @@ async function reroute(){
 /* ================= wake lock ================= */
 let wl=null;
 async function requestWakeLock(){
-  if(!navigator.wakeLock || wl) return;
+  if(wl || typeof navigator.wakeLock==="undefined") return;
   try{
-    wl=await navigator.wakeLock.request("screen");
-    wl.addEventListener("release",()=>{ wl=null; });
-  }catch(e){}
+    const l=await navigator.wakeLock.request("screen");
+    wl=l;
+    l.addEventListener("release",()=>{ if(wl===l) wl=null; });
+  }catch(e){ wl=null; }
 }
+function keepScreenOn(){
+  requestWakeLock();
+  setTimeout(keepScreenOn, 45000);
+}
+keepScreenOn();
 document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="visible") requestWakeLock();
 });
+["touchstart","pointerdown"].forEach(ev=>document.addEventListener(ev,()=>requestWakeLock(),{passive:true}));
 </script>
 </body>
 </html>
