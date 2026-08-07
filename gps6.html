@@ -715,10 +715,11 @@ const POI_TAGS={
   sight:"tourism"
 };
 const POI_ENDPOINTS=[
-  "https://overpass-api.de/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
-  "https://overpass.osm.jp/api/interpreter"
+  "https://overpass.osm.jp/api/interpreter",
+  "https://overpass-api.de/api/interpreter"
 ];
 
 function closePoiBar(){
@@ -745,7 +746,7 @@ async function overpassQuery(q){
       const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),signal:AbortSignal.timeout(20000)});
       if(!r.ok) continue;
       const j=await r.json();
-      if(j.elements && j.elements.length) return j.elements;
+      if(j.elements) return j.elements;
     }catch(e){}
   }
   return [];
@@ -762,7 +763,9 @@ async function fetchPOIsByName(name,lat,lon){
   const esc=escReg(name);
   return overpassQuery(
     `[out:json][timeout:20];(node["name"~"${esc}",i](around:5000,${lat},${lon});`+
-    `way["name"~"${esc}",i](around:5000,${lat},${lon}););out center 20;`
+    `way["name"~"${esc}",i](around:5000,${lat},${lon});`+
+    `node["name:en"~"${esc}",i](around:5000,${lat},${lon});`+
+    `way["name:en"~"${esc}",i](around:5000,${lat},${lon}););out center 20;`
   );
 }
 
@@ -1146,14 +1149,10 @@ let ttsAudio=null, speakToken=0;
 function speakOnline(text){
   try{
     if(ttsAudio){ ttsAudio.pause(); ttsAudio.currentTime=0; }
-    ttsAudio=new Audio("https://api.streamelements.com/kappa/v2/speech?voice=Brian&text="+encodeURIComponent(text));
-    ttsAudio.onerror=()=>{
-      try{
-        const a=new Audio("https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q="+encodeURIComponent(text));
-        a.play().catch(()=>{});
-      }catch(e){}
-    };
-    ttsAudio.play().catch(()=>{});
+    const a=new Audio("https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q="+encodeURIComponent(text));
+    ttsAudio=a;
+    a.onerror=()=>{ if(a===ttsAudio) ttsAudio=null; };
+    a.play().catch(()=>{});
   }catch(e){}
 }
 function switchToOnline(){
