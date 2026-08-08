@@ -983,6 +983,9 @@ async function fetchValhallaRoute(u,d){
   const body={
     locations:[{lat:u.lat,lon:u.lon},{lat:d.lat,lon:d.lon}],
     costing: transportMode==="foot"?"pedestrian":"auto",
+    costing_options: transportMode==="foot"
+      ? { pedestrian:{ ignore_oneways:true } }
+      : { auto:{ use_highways:0.95 } },
     directions_options:{units:"kilometers", language:"en-US"}
   };
   for(const ep of ["https://valhalla1.openstreetmap.de/route","https://valhalla2.openstreetmap.de/route"]){
@@ -995,7 +998,7 @@ async function fetchValhallaRoute(u,d){
   }
   return null;
 }
-let routeLine=null, activeSegLine=null, routeSteps=[], routeCoords=[], routeActive=false, routeDuration=0, maneuverS=null, arrived=false, remainDistArrived=false;
+let routeLine=null, activeSegLine=null, routeSteps=[], routeCoords=[], routeActive=false, routeDuration=0, maneuverS=null, arrived=false, remainDistArrived=false, routeSeq=0, rerouting=false;
 
 document.getElementById("routeBtn").onclick=()=>{
   if(!lastPos){ toast("Waiting for GPS fix…"); return; }
@@ -1027,6 +1030,7 @@ async function startRoute(refit=true, silentBoot=false){
   if(!lastPos){ toast("Waiting for GPS fix…"); return; }
   if(!dest){ toast("Set a destination first"); return; }
   requestWakeLock();
+  const mySeq=++routeSeq;
 
   const u=lastPos, d=dest;
   if(hav([u.lat,u.lon],[d.lat,d.lon])<25){
@@ -1040,17 +1044,19 @@ async function startRoute(refit=true, silentBoot=false){
   for(const base of getRouters()){
     try{
       const url=`${base}${u.lon},${u.lat};${d.lon},${d.lat}?overview=full&steps=true&geometries=geojson&alternatives=true`;
-      const r=await fetch(url);
+      const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
       if(!r.ok){ lastErr=`server ${r.status}`; continue; }
       const x=await r.json();
       if(x.routes && x.routes.length){ j=x; break; }
       lastErr=x.message||"no route";
     }catch(e){ lastErr="network"; }
   }
+  if(mySeq!==routeSeq) return;
   if(!j || !j.routes || !j.routes.length){
     j=await fetchValhallaRoute(u,d);
     if(j) lastErr="osrm offline — valhalla";
   }
+  if(mySeq!==routeSeq) return;
   if(!j || !j.routes || !j.routes.length){
     toast(`No route found (${lastErr}). Try a nearby road or street.`);
     setStatus("📍 GPS ready");
@@ -1090,6 +1096,8 @@ async function startRoute(refit=true, silentBoot=false){
 }
 
 function stopRoute(){
+  routeSeq++;
+  rerouting=false;
   routeActive=false; arrived=false; remainDistArrived=false;
   cancelSpeech();
   ttsState={idx:-1, spoken:Infinity};
@@ -1317,7 +1325,12 @@ function pointAlongRoute(cum, s){
 function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
   const step=routeSteps[nextIdx];
   if(!step || remainDistArrived || !navView){ return; }
-  rvText.textContent=step.maneuver.instruction || step.name || "Continue";
+  const mt=step.maneuver.type||"continue";
+  const instr=step.maneuver.instruction || step.name || "Continue";
+  const turnish=["turn-left","turn-right","slight-left","slight-right","sharp-left","sharp-right","roundabout","uturn","merge"];
+  rvText.textContent=(turnish.includes(mt) && distToTurn>0)
+    ? `${instr} in ${formatDistance(distToTurn)}`
+    : instr;
   rvSub.textContent=step.name||"";
   rvDist.textContent=formatDistance(distToTurn);
   rvArrow.innerHTML=bigArrow(step.maneuver.type);
@@ -1443,7 +1456,7 @@ function updateNavigation(){
   const proj=projectOnRoute(lastPos.lat, lastPos.lon);
   const userS=proj.s, totalDist=proj.total;
 
-  if(proj.off>0.0004){ reroute(); return; }
+  if(proj.off>0.0004){ scheduleReroute(); return; }
 
   if(!maneuverS || maneuverS.length!==routeSteps.length){
     maneuverS=routeSteps.map(s=>{
@@ -1484,11 +1497,20 @@ function updateNavigation(){
   }
 }
 
-async function reroute(){
+async function scheduleReroute(){
+  if(rerouting || !routeActive) return;
+  const now=Date.now();
+  if(now-(scheduleReroute._last||0)<8000) return;
+  scheduleReroute._last=now;
+  rerouting=true;
   navText.textContent="Rerouting…";
   navSub.textContent="";
   speak("Rerouting");
-  await startRoute(false, true);
+  try{
+    await startRoute(false, true);
+  }finally{
+    rerouting=false;
+  }
 }
 
 /* ================= wake lock ================= */
