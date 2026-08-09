@@ -1426,16 +1426,14 @@ function pointAlongRoute(cum, s){
 }
 
 function carSvg(color){
-  return `<svg viewBox="0 0 60 100">
-    <rect x="7" y="18" width="46" height="76" rx="14" fill="${color}" stroke="#111" stroke-width="2.5"/>
-    <rect x="7" y="26" width="46" height="15" rx="5" fill="#0a0f14"/>
-    <rect x="7" y="62" width="46" height="11" rx="5" fill="#0a0f14"/>
-    <rect x="3" y="35" width="9" height="34" rx="3" fill="#101010"/>
-    <rect x="48" y="35" width="9" height="34" rx="3" fill="#101010"/>
-    <rect x="12" y="15" width="7" height="4" rx="2" fill="#fff"/>
-    <rect x="41" y="15" width="7" height="4" rx="2" fill="#fff"/>
-    <rect x="20" y="18" width="20" height="6" rx="3" fill="#0a0f14"/>
-  </svg>`;
+  return `<rect x="-30" y="-50" width="46" height="76" rx="14" fill="${color}" stroke="#111" stroke-width="2.5"/>
+    <rect x="-30" y="-42" width="46" height="15" rx="5" fill="#0a0f14"/>
+    <rect x="-30" y="-6" width="46" height="11" rx="5" fill="#0a0f14"/>
+    <rect x="-34" y="-33" width="9" height="34" rx="3" fill="#101010"/>
+    <rect x="25" y="-33" width="9" height="34" rx="3" fill="#101010"/>
+    <rect x="-25" y="-53" width="7" height="4" rx="2" fill="#fff"/>
+    <rect x="18" y="-53" width="7" height="4" rx="2" fill="#fff"/>
+    <rect x="-17" y="-50" width="20" height="6" rx="3" fill="#0a0f14"/>`;
 }
 
 function curveAdvisory(cum, userS){
@@ -1580,7 +1578,7 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
     `<polygon points="${hiPts}" fill="#2f9bff" opacity="0.9"/>`+
     branches+
     `<path d="${cl}" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2" stroke-dasharray="10 12" stroke-linecap="round"/>`+
-    `<g transform="translate(${(W/2).toFixed(1)},${(H-W*0.05).toFixed(1)}) scale(${(cs/60).toFixed(3)}) translate(-30,-50)">${carSvg(carColor)}</g>`;
+    `<g transform="translate(${(W/2).toFixed(1)},${(H-W*0.05).toFixed(1)}) scale(${(cs/60).toFixed(3)})">${carSvg(carColor)}</g>`;
 }
 
 function updateNavigation(){
