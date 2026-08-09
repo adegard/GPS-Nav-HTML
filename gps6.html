@@ -175,31 +175,77 @@
 
   /* Speedometer */
   #speed {
-    position: fixed;
+    position: absolute;
     right: 1rem;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 5.4rem);
-    z-index: 2400;
-    background: rgba(0,0,0,0.6);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+    z-index: 3;
+    background: rgba(0,0,0,0.7);
     border: 1px solid #444;
     border-radius: 12px;
-    padding: 0.4rem 0.7rem;
+    padding: 0.35rem 0.65rem;
     color: #fff;
     text-align: center;
     line-height: 1;
     pointer-events: none;
-    min-width: 3.4rem;
+    min-width: 3.2rem;
   }
   #speed-val {
-    font-size: 1.7rem;
+    font-size: 1.5rem;
     font-weight: 800;
     color: #ffcc00;
   }
   #speed-unit {
     display: block;
-    font-size: 0.58rem;
+    font-size: 0.55rem;
     font-weight: 600;
     opacity: 0.8;
-    margin-top: 0.15rem;
+    margin-top: 0.12rem;
+  }
+
+  /* Bottom-left written turn instruction */
+  #rv-turn {
+    position: absolute;
+    left: 1rem;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: rgba(0,0,0,0.7);
+    border: 2px solid #ffcc00;
+    border-radius: 14px;
+    padding: 0.45rem 0.85rem;
+    max-width: 68%;
+    pointer-events: none;
+  }
+  #rv-turn.warn {
+    animation: rvPulse 0.6s infinite alternate;
+  }
+  #rv-turn-icon {
+    flex-shrink: 0;
+    width: 2.6rem;
+    height: 2.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #rv-turn-icon svg {
+    width: 2.2rem;
+    height: 2.2rem;
+    display: block;
+  }
+  #rv-turn-text {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 1px 4px #000;
+    line-height: 1.1;
+  }
+  #rv-turn-dist {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #ffcc00;
+    margin-top: 0.05rem;
   }
 
   /* Search results */
@@ -496,8 +542,6 @@
   <button id="stopBtn">⏹<br><small>Stop</small></button>
 </div>
 
-<div id="speed"><span id="speed-val">0</span><span id="speed-unit">km/h</span></div>
-
 <div id="road-view">
   <div id="rv-btns">
     <button id="rvStop" title="Stop navigation">⏹ Stop</button>
@@ -507,12 +551,16 @@
     <div id="rv-arrow"></div>
     <div id="rv-meta">
       <div id="rv-dist">…</div>
-      <div id="rv-text">Continue</div>
-      <div id="rv-sub"></div>
     </div>
   </div>
   <svg id="road-svg"></svg>
   <div id="rv-eta"></div>
+  <div id="rv-turn">
+    <div id="rv-turn-icon"></div>
+    <div id="rv-turn-text">Continue</div>
+    <div id="rv-turn-dist"></div>
+  </div>
+  <div id="speed"><span id="speed-val">0</span><span id="speed-unit">km/h</span></div>
 </div>
 
 <div id="nav-bar">
@@ -633,10 +681,12 @@ function handlePos(pos){
     const dt=(now-lastSpeedT)/1000;
     if(dt>0.5){
       const d=hav([prev.lat,prev.lon],[latitude,longitude])*1000;
-      if(d>0.5) kmh=(d/dt)*3.6;
+      if(d>1 && d<150) kmh=(d/dt)*3.6;
     }
   }
-  lastSpeed=kmh; lastSpeedT=now;
+  if(kmh>320) kmh=0;
+  lastSpeed=lastSpeed*0.5+kmh*0.5;
+  lastSpeedT=now;
   updateSpeed();
 
   let hd=heading;
@@ -1164,10 +1214,11 @@ const navText=document.getElementById("nav-text");
 const navSub=document.getElementById("nav-sub");
 const roadView=document.getElementById("road-view");
 const roadSvg=document.getElementById("road-svg");
-const rvText=document.getElementById("rv-text");
-const rvSub=document.getElementById("rv-sub");
 const rvDist=document.getElementById("rv-dist");
 const rvArrow=document.getElementById("rv-arrow");
+const rvTurnIcon=document.getElementById("rv-turn-icon");
+const rvTurnText=document.getElementById("rv-turn-text");
+const rvTurnDist=document.getElementById("rv-turn-dist");
 const rvEta=document.getElementById("rv-eta");
 const rvToggle=document.getElementById("rvToggle");
 const rvStop=document.getElementById("rvStop");
@@ -1377,13 +1428,11 @@ function pointAlongRoute(cum, s){
 function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
   const step=routeSteps[nextIdx];
   if(!step || remainDistArrived || !navView){ return; }
-  const mt=step.maneuver.type||"continue";
   const instr=step.maneuver.instruction || step.name || "Continue";
-  const turnish=["turn-left","turn-right","slight-left","slight-right","sharp-left","sharp-right","roundabout","uturn","merge"];
-  rvText.textContent=(turnish.includes(mt) && distToTurn>0)
-    ? `${instr} in ${formatDistance(distToTurn)}`
-    : instr;
-  rvSub.textContent=step.name||"";
+  rvTurnText.textContent=instr;
+  rvTurnDist.textContent=distToTurn>0 ? `in ${formatDistance(distToTurn)}` : "now";
+  rvTurnIcon.innerHTML=bigArrow(step.maneuver.type);
+  rvTurnIcon.parentElement.classList.toggle("warn", distToTurn<100);
   rvDist.textContent=formatDistance(distToTurn);
   rvArrow.innerHTML=bigArrow(step.maneuver.type);
   rvArrow.classList.toggle("warn", distToTurn<100);
