@@ -201,6 +201,16 @@
     opacity: 0.8;
     margin-top: 0.12rem;
   }
+  #speed-limit {
+    display: block;
+    margin-top: 0.25rem;
+    padding-top: 0.2rem;
+    border-top: 1px solid #444;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #8ef58a;
+  }
+  #speed-limit.over { color: #ff4136; }
 
   /* Bottom-left written turn instruction */
   #rv-turn {
@@ -560,7 +570,7 @@
     <div id="rv-turn-text">Continue</div>
     <div id="rv-turn-dist"></div>
   </div>
-  <div id="speed"><span id="speed-val">0</span><span id="speed-unit">km/h</span></div>
+  <div id="speed"><span id="speed-val">0</span><span id="speed-unit">km/h</span><span id="speed-limit"></span></div>
 </div>
 
 <div id="nav-bar">
@@ -706,6 +716,16 @@ function handlePos(pos){
 function updateSpeed(){
   const el=document.getElementById("speed-val");
   if(el) el.textContent=Math.round(lastSpeed);
+  const le=document.getElementById("speed-limit");
+  if(le){
+    if(curLimit){
+      le.textContent="Limit "+curLimit;
+      le.classList.toggle("over", lastSpeed>curLimit);
+    }else{
+      le.textContent="";
+      le.classList.remove("over");
+    }
+  }
 }
 
 let userInteracting=false;
@@ -1097,6 +1117,7 @@ async function fetchValhallaRoute(u,d){
   return null;
 }
 let routeLine=null, activeSegLine=null, routeSteps=[], routeCoords=[], routeActive=false, routeDuration=0, maneuverS=null, arrived=false, remainDistArrived=false, routeSeq=0, rerouting=false;
+let routeCum=[], speedLimits=[], curLimit=null;
 
 document.getElementById("routeBtn").onclick=()=>{
   if(!lastPos){ toast("Waiting for GPS fix…"); return; }
@@ -1170,6 +1191,10 @@ async function startRoute(refit=true, silentBoot=false){
     }
     routeSteps=route.legs[0].steps;
     routeCoords=route.geometry.coordinates.map(c=>[c[1],c[0]]);
+    routeCum=[0];
+    for(let i=1;i<routeCoords.length;i++) routeCum[i]=routeCum[i-1]+hav(routeCoords[i-1],routeCoords[i]);
+    curLimit=null;
+    fetchSpeedLimits();
     routeDuration=route.duration;
     maneuverS=null;
     arrived=false;
@@ -1196,6 +1221,7 @@ async function startRoute(refit=true, silentBoot=false){
 function stopRoute(){
   routeSeq++;
   rerouting=false;
+  speedLimits=[]; routeCum=[]; curLimit=null;
   routeActive=false; arrived=false; remainDistArrived=false;
   cancelSpeech();
   ttsState={idx:-1, spoken:Infinity};
@@ -1463,6 +1489,75 @@ function curveAdvisory(cum, userS){
   return Math.max(25, Math.min(130, Math.round(v)));
 }
 
+function parseMaxspeed(v){
+  if(v==null) return null;
+  const n=parseFloat(v);
+  if(Number.isFinite(n)&&n>0) return Math.round(n);
+  const s=String(v).toLowerCase();
+  if(s.includes("urban")) return 50;
+  if(s.includes("rural")) return 90;
+  if(s.includes("motorway")) return 130;
+  if(s.includes("trunk")) return 100;
+  if(s.includes("living_street")) return 7;
+  const m=s.match(/(\d+)/);
+  return m? +m[1] : null;
+}
+
+async function fetchSpeedLimits(){
+  speedLimits=[];
+  if(transportMode!=="car" || !routeCoords || routeCoords.length<4 || !routeCum.length) return;
+  const total=routeCum[routeCum.length-1];
+  const pts=[];
+  for(let s=0; s<Math.min(total,8000); s+=100){
+    const p=pointAlongRoute(routeCum,s);
+    pts.push(p[0].toFixed(5)+","+p[1].toFixed(5));
+  }
+  const q=`[out:json][timeout:20];way["highway"]["maxspeed"](around:30,${pts.join(",")});(._;>;);out;`;
+  const mp=[];
+  for(let s=0;s<=Math.min(total,8000);s+=8) mp.push(pointAlongRoute(routeCum,s));
+  const zones=[];
+  for(const ep of POI_ENDPOINTS){
+    try{
+      const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"data="+encodeURIComponent(q),signal:AbortSignal.timeout(15000)});
+      if(!r.ok) continue;
+      const j=await r.json();
+      const els=j.elements||[];
+      const nodes={}, ways=[];
+      for(const e of els){
+        if(e.type==="node" && e.lat!=null) nodes[e.id]={lat:e.lat,lon:e.lon};
+        else if(e.type==="way") ways.push(e);
+      }
+      for(const w of ways){
+        if(!w.tags) continue;
+        const lim=parseMaxspeed(w.tags.maxspeed);
+        if(!lim) continue;
+        const geom=(w.nodes||[]).map(id=>nodes[id]).filter(Boolean);
+        if(!geom.length) continue;
+        const hits=[];
+        for(const g of geom){
+          let best=1e18, bi=0, bt=0;
+          for(let i=0;i<mp.length-1;i++){
+            const pr=projOnSeg([g.lat,g.lon],mp[i],mp[i+1]);
+            if(pr.d<best){ best=pr.d; bi=i; bt=pr.t; }
+          }
+          if(best<40) hits.push(8*bi+bt*8);
+        }
+        if(hits.length){
+          const h0=Math.min(...hits), h1=Math.max(...hits);
+          zones.push({s0:h0, s1:h1, limit:lim});
+        }
+      }
+      break;
+    }catch(e){}
+  }
+  speedLimits=zones;
+}
+
+function limitAt(s){
+  for(const z of speedLimits){ if(s>=z.s0-2 && s<=z.s1+2) return z.limit; }
+  return null;
+}
+
 function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
   const step=routeSteps[nextIdx];
   if(!step || remainDistArrived || !navView){ return; }
@@ -1560,8 +1655,30 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
   }
 
   const adv=curveAdvisory(cum, userS);
-  const carColor=(adv && lastSpeed>adv*1.3) ? "#ff4136" : "#2ecc40";
+  const carColor=(adv && lastSpeed>adv*1.5) ? "#ff4136" : "#2ecc40";
   const cs=Math.max(W*0.12, 26);
+
+  let signs="";
+  const signOff=roadW/2+2.2;
+  for(const z of speedLimits){
+    if(z.s0>userS+previewDepth) break;
+    if(z.s0<userS-5) continue;
+    const sp=pointAlongRoute(cum,z.s0);
+    const sp2=pointAlongRoute(cum,Math.min(totalDist,z.s0+6));
+    const hdg=computeHeading(sp[0],sp[1],sp2[0],sp2[1]);
+    const rad=(hdg+90)*Math.PI/180;
+    const slat=sp[0]+signOff*Math.cos(rad)/110540;
+    const slon=sp[1]+signOff*Math.sin(rad)/(111320*Math.cos(sp[0]*Math.PI/180));
+    const {a,l}=toAlong([slat,slon]);
+    if(a<=2.5) continue;
+    const Q=projP(a,l);
+    if(Q.y<horizonY-10 || Q.y>H-10 || Q.x<-40 || Q.x>W+40) continue;
+    const k=Math.max(0.045, 2.2*Q.s/84);
+    signs+=`<g transform="translate(${Q.x.toFixed(1)},${Q.y.toFixed(1)}) scale(${k.toFixed(4)})">
+      <circle r="42" fill="#fff" stroke="#d11" stroke-width="10"/>
+      <text y="13" text-anchor="middle" font-size="46" font-weight="bold" fill="#111">${z.limit}</text>
+    </g>`;
+  }
 
   roadSvg.innerHTML=
     `<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">`+
@@ -1574,6 +1691,7 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
     `<polygon points="${hiPts}" fill="#2f9bff" opacity="0.9"/>`+
     branches+
     `<path d="${cl}" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2" stroke-dasharray="10 12" stroke-linecap="round"/>`+
+    signs+
     `<g transform="translate(${(W/2).toFixed(1)},${(H-W*0.05).toFixed(1)}) scale(${(cs/60).toFixed(3)})">${carSvg(carColor)}</g>`;
 }
 
@@ -1581,6 +1699,8 @@ function updateNavigation(){
   if(!routeActive || !lastPos || !routeSteps.length || !routeCoords.length) return;
   const proj=projectOnRoute(lastPos.lat, lastPos.lon);
   const userS=proj.s, totalDist=proj.total;
+  curLimit=limitAt(userS)||null;
+  updateSpeed();
 
   if(proj.off>0.0004){ scheduleReroute(); return; }
 
