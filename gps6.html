@@ -1294,9 +1294,32 @@ function bigArrow(type){
   }
 }
 
+function maneuverText(step){
+  const m=step.maneuver||{}, name=step.name||"";
+  if(m.instruction) return m.instruction;
+  const t=(m.type||"continue").toLowerCase().replace(/[ _]+/g,"-");
+  const mod=(m.modifier||"").toLowerCase();
+  let base="Continue";
+  if(t==="turn"||t==="turn-right"||t==="turn-left"||t==="sharp-right"||t==="sharp-left"){
+    base = mod==="left" ? "Turn left" : mod==="right" ? "Turn right"
+      : t.includes("right") ? "Turn right" : t.includes("left") ? "Turn left" : "Turn";
+  }
+  else if(t==="slight-right") base="Keep right";
+  else if(t==="slight-left") base="Keep left";
+  else if(t==="end-of-road") base = mod==="left" ? "Turn left" : mod==="right" ? "Turn right" : "Turn";
+  else if(t==="fork"||t==="merge") base = mod==="left" ? "Keep left" : mod==="right" ? "Keep right" : (t==="merge"?"Merge":"Fork");
+  else if(t==="uturn") base="Make a U-turn";
+  else if(t==="roundabout"||t==="rotary"||t==="roundabout-turn") base="Take the roundabout";
+  else if(t==="on-ramp") base="Take the ramp";
+  else if(t==="off-ramp") base="Take the exit";
+  else if(t==="arrive") return "You have arrived";
+  else if(t==="depart") return "Start";
+  return name ? `${base} onto ${name}` : base;
+}
+
 function updateNavBar(step,dist,etaSec,remainDist){
   navIcon.innerHTML=svgIcon(step.maneuver.type);
-  navText.textContent=step.maneuver.instruction || step.name || "Continue";
+  navText.textContent=maneuverText(step);
   navSub.textContent=`${formatDistance(dist)} to turn • ETA ${formatETA(etaSec)} • ${formatDistance(remainDist)} left`;
 }
 
@@ -1387,12 +1410,12 @@ function checkTTS(next, distToTurn, step, kmh){
   if(ttsBoot){
     ttsBoot=false;
     ttsState={idx:next, spoken:2000};
-    speak(step.maneuver.instruction||step.name||"Continue");
+    speak(maneuverText(step));
     return;
   }
   if(next!==ttsState.idx){ ttsState={idx:next, spoken:Infinity}; }
   const thr=ttsThreshold(kmh);
-  const inst=step.maneuver.instruction||step.name||"Continue";
+  const inst=maneuverText(step);
   if(distToTurn<=thr && thr<ttsState.spoken){
     ttsState.spoken=thr;
     speak(`In ${formatDistance(distToTurn)}, ${inst}`);
@@ -1561,11 +1584,14 @@ function limitAt(s){
 function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
   const step=routeSteps[nextIdx];
   if(!step || remainDistArrived || !navView){ return; }
-  const instr=step.maneuver.instruction || step.name || "Continue";
+  const instr=maneuverText(step);
+  const rvTurnEl=rvTurnIcon.parentElement;
+  const showTurn=distToTurn<=ttsThreshold(lastSpeed);
+  rvTurnEl.style.display=showTurn ? "flex" : "none";
   rvTurnText.textContent=instr;
   rvTurnDist.textContent=distToTurn>0 ? `in ${formatDistance(distToTurn)}` : "now";
   rvTurnIcon.innerHTML=bigArrow(step.maneuver.type);
-  rvTurnIcon.parentElement.classList.toggle("warn", distToTurn<100);
+  rvTurnEl.classList.toggle("warn", distToTurn<100);
   rvDist.textContent=formatDistance(distToTurn);
   rvArrow.innerHTML=bigArrow(step.maneuver.type);
   rvArrow.classList.toggle("warn", distToTurn<100);
