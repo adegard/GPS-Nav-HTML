@@ -1426,10 +1426,10 @@ function pointAlongRoute(cum, s){
 }
 
 function carSvg(color){
-  return `<rect x="-28" y="-46" width="56" height="92" rx="16" fill="${color}" stroke="#111" stroke-width="3"/>
-    <rect x="-17" y="-22" width="34" height="52" rx="9" fill="#0a0f14"/>
-    <rect x="-33" y="-32" width="10" height="34" rx="4" fill="#101010"/>
-    <rect x="23" y="-32" width="10" height="34" rx="4" fill="#101010"/>`;
+  return `<polygon points="-20,-46 20,-46 30,46 -30,46" fill="${color}" stroke="#111" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="-12,-20 12,-20 19,36 -19,36" fill="#0a0f14"/>
+    <polygon points="-32,-34 -22,-37 -24,8 -35,12" fill="#101010"/>
+    <polygon points="22,-37 32,-34 35,12 24,8" fill="#101010"/>`;
 }
 
 function curveAdvisory(cum, userS){
@@ -1560,7 +1560,7 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
   }
 
   const adv=curveAdvisory(cum, userS);
-  const carColor=(adv && lastSpeed>adv*1.2) ? "#ff4136" : "#2ecc40";
+  const carColor=(adv && lastSpeed>adv*1.3) ? "#ff4136" : "#2ecc40";
   const cs=Math.max(W*0.12, 26);
 
   roadSvg.innerHTML=
