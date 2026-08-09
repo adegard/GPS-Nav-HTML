@@ -21,9 +21,8 @@ A single-file, offline-first **GPS navigation app** built entirely with HTML, CS
 
 ## Screenshots
 
-| Map view | 3D navigation view |
-|---|---|
-| ![Map view](screenshots/Screenshot_20260807-101315.png) | ![3D navigation view](screenshots/Screenshot_20260809-091745.png) |
+| 3D navigation view |
+|--- ![3D navigation view](screenshots/Screenshot_20260809-091745.png) |
 
 ## How to use
 
