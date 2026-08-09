@@ -680,7 +680,7 @@ function handlePos(pos){
   if(kmh<=0 && prev && lastSpeedT){
     const dt=(now-lastSpeedT)/1000;
     if(dt>0.5){
-      const d=hav([prev.lat,prev.lon],[latitude,longitude])*1000;
+      const d=hav([prev.lat,prev.lon],[latitude,longitude]);
       if(d>1 && d<150) kmh=(d/dt)*3.6;
     }
   }
@@ -1425,6 +1425,50 @@ function pointAlongRoute(cum, s){
   return [rc[rc.length-1][0], rc[rc.length-1][1]];
 }
 
+function carSvg(color){
+  return `<svg viewBox="0 0 60 100">
+    <rect x="7" y="18" width="46" height="76" rx="14" fill="${color}" stroke="#111" stroke-width="2.5"/>
+    <rect x="7" y="26" width="46" height="15" rx="5" fill="#0a0f14"/>
+    <rect x="7" y="62" width="46" height="11" rx="5" fill="#0a0f14"/>
+    <rect x="3" y="35" width="9" height="34" rx="3" fill="#101010"/>
+    <rect x="48" y="35" width="9" height="34" rx="3" fill="#101010"/>
+    <rect x="12" y="15" width="7" height="4" rx="2" fill="#fff"/>
+    <rect x="41" y="15" width="7" height="4" rx="2" fill="#fff"/>
+    <rect x="20" y="18" width="20" height="6" rx="3" fill="#0a0f14"/>
+  </svg>`;
+}
+
+function curveAdvisory(cum, userS){
+  const rc=routeCoords;
+  if(!rc || rc.length<4 || cum[cum.length-1]-userS<40) return null;
+  const lookAhead=Math.min(200, cum[cum.length-1]-userS);
+  const step=3, W=5;
+  const n=Math.floor(lookAhead/step);
+  const turn=[];
+  let prevB=null;
+  for(let k=0;k<n;k++){
+    const p1=pointAlongRoute(cum, userS+k*step);
+    const p2=pointAlongRoute(cum, userS+(k+1)*step);
+    const b=computeHeading(p1[0],p1[1],p2[0],p2[1]);
+    if(prevB!=null) turn.push(((b-prevB+540)%360)-180);
+    prevB=b;
+  }
+  let maxCurv=0;
+  for(let k=0;k<turn.length;k++){
+    let sum=0;
+    const j0=Math.max(0,k-(W>>1)), j1=Math.min(turn.length-1,k+(W>>1));
+    for(let j=j0;j<=j1;j++) sum+=turn[j];
+    const avg=Math.abs(sum)/(j1-j0+1);
+    if(avg>maxCurv) maxCurv=avg;
+  }
+  if(maxCurv<0.5) return null;
+  const turnRad=maxCurv*Math.PI/180;
+  const radius=step/turnRad;
+  if(!Number.isFinite(radius)) return null;
+  const v=Math.sqrt(2.5*radius)*3.6;
+  return Math.max(25, Math.min(130, Math.round(v)));
+}
+
 function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
   const step=routeSteps[nextIdx];
   if(!step || remainDistArrived || !navView){ return; }
@@ -1521,6 +1565,10 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
     });
   }
 
+  const adv=curveAdvisory(cum, userS);
+  const carColor=(adv && lastSpeed>adv*1.1) ? "#ff4136" : "#2ecc40";
+  const cs=Math.max(W*0.12, 26);
+
   roadSvg.innerHTML=
     `<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">`+
       `<stop offset="0" stop-color="#5f83b0"/><stop offset="1" stop-color="#2b3c60"/></linearGradient>`+
@@ -1532,7 +1580,7 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
     `<polygon points="${hiPts}" fill="#2f9bff" opacity="0.9"/>`+
     branches+
     `<path d="${cl}" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2" stroke-dasharray="10 12" stroke-linecap="round"/>`+
-    `<circle cx="${(W/2).toFixed(1)}" cy="${(H-W*0.05).toFixed(1)}" r="${Math.max(8,W*0.04).toFixed(1)}" fill="#fff" stroke="#2f9bff" stroke-width="${Math.max(3,W*0.012).toFixed(1)}"/>`;
+    `<g transform="translate(${(W/2).toFixed(1)},${(H-W*0.05).toFixed(1)}) scale(${(cs/60).toFixed(3)}) translate(-30,-50)">${carSvg(carColor)}</g>`;
 }
 
 function updateNavigation(){
