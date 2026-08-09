@@ -173,6 +173,35 @@
   #controls button.on { border-color: #5ce1ff; color: #5ce1ff; }
   #controls button:active { background: #333; }
 
+  /* Speedometer */
+  #speed {
+    position: fixed;
+    right: 1rem;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 5.4rem);
+    z-index: 2400;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 0.4rem 0.7rem;
+    color: #fff;
+    text-align: center;
+    line-height: 1;
+    pointer-events: none;
+    min-width: 3.4rem;
+  }
+  #speed-val {
+    font-size: 1.7rem;
+    font-weight: 800;
+    color: #ffcc00;
+  }
+  #speed-unit {
+    display: block;
+    font-size: 0.58rem;
+    font-weight: 600;
+    opacity: 0.8;
+    margin-top: 0.15rem;
+  }
+
   /* Search results */
   #search-results {
     position: fixed;
@@ -467,6 +496,8 @@
   <button id="stopBtn">⏹<br><small>Stop</small></button>
 </div>
 
+<div id="speed"><span id="speed-val">0</span><span id="speed-unit">km/h</span></div>
+
 <div id="road-view">
   <div id="rv-btns">
     <button id="rvStop" title="Stop navigation">⏹ Stop</button>
@@ -579,6 +610,7 @@ function updateHeadingChip(angle){
 /* ================= GPS (starts immediately) ================= */
 let follow=true, watchId=null;
 let lastPos=null, lastPosForHeading=null, lastHeading=0;
+let lastSpeed=0, lastSpeedT=0;
 
 function startGPS(){
   if(watchId!==null) return;
@@ -591,9 +623,21 @@ function startGPS(){
 }
 
 function handlePos(pos){
-  const {latitude,longitude,accuracy,heading}=pos.coords;
+  const {latitude,longitude,accuracy,heading,speed}=pos.coords;
   const prev=lastPosForHeading;
   lastPos={lat:latitude,lon:longitude,acc:accuracy};
+
+  let kmh=(speed!=null && !Number.isNaN(speed)) ? speed*3.6 : 0;
+  const now=Date.now();
+  if(kmh<=0 && prev && lastSpeedT){
+    const dt=(now-lastSpeedT)/1000;
+    if(dt>0.5){
+      const d=hav([prev.lat,prev.lon],[latitude,longitude])*1000;
+      if(d>0.5) kmh=(d/dt)*3.6;
+    }
+  }
+  lastSpeed=kmh; lastSpeedT=now;
+  updateSpeed();
 
   let hd=heading;
   if(hd==null && prev) hd=computeHeading(prev.lat,prev.lon,latitude,longitude);
@@ -608,6 +652,10 @@ function handlePos(pos){
   updateHeadingChip(lastHeading);
   if(routeActive) updateNavigation();
   setStatus(`📍 GPS ${formatDistance(accuracy)}`);
+}
+function updateSpeed(){
+  const el=document.getElementById("speed-val");
+  if(el) el.textContent=Math.round(lastSpeed);
 }
 
 let userInteracting=false;
@@ -1251,10 +1299,13 @@ function cancelSpeech(){
   try{ if(ttsAudio){ ttsAudio.pause(); ttsAudio.currentTime=0; } }catch(e){}
 }
 
-const TTS_LEVELS=[2000,1000,500,300,200,100,50,30];
+function ttsThreshold(kmh){
+  const v=Math.max(0, Number.isFinite(kmh)?kmh:0);
+  return Math.max(300, Math.min(1000, 14*v-400));
+}
 let ttsState={idx:-1, spoken:Infinity};
 let ttsBoot=false;
-function checkTTS(next, distToTurn, step){
+function checkTTS(next, distToTurn, step, kmh){
   if(ttsMode==="off" || !step) return;
   if(ttsBoot){
     ttsBoot=false;
@@ -1263,13 +1314,14 @@ function checkTTS(next, distToTurn, step){
     return;
   }
   if(next!==ttsState.idx){ ttsState={idx:next, spoken:Infinity}; }
-  for(const lv of TTS_LEVELS){
-    if(distToTurn<=lv && lv<ttsState.spoken){
-      ttsState.spoken=lv;
-      const inst=step.maneuver.instruction||step.name||"Continue";
-      speak(lv<=30 ? inst : `In ${formatDistance(distToTurn)}, ${inst}`);
-      break;
-    }
+  const thr=ttsThreshold(kmh);
+  const inst=step.maneuver.instruction||step.name||"Continue";
+  if(distToTurn<=thr && thr<ttsState.spoken){
+    ttsState.spoken=thr;
+    speak(`In ${formatDistance(distToTurn)}, ${inst}`);
+  } else if(distToTurn<=30 && 30<ttsState.spoken){
+    ttsState.spoken=30;
+    speak(inst);
   }
 }
 
@@ -1338,8 +1390,8 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
 
   const W=roadSvg.clientWidth||360, H=roadSvg.clientHeight||640;
   roadSvg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const horizonY=H*0.40, groundH=H-horizonY;
-  const K=groundH*2.2, fov=W*1.05;
+  const horizonY=H*0.33, groundH=H-horizonY;
+  const K=groundH*3.0, fov=W*1.05;
   const projP=(along, lat)=>{
     const d=Math.max(2.5, along);
     return {x:W/2+fov*lat/d, y:horizonY+K/d, s:K/d};
@@ -1420,22 +1472,6 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
     });
   }
 
-  const mx=W/2+fov*mlat/Math.max(2.5,malong), my=horizonY+K/Math.max(2.5,malong);
-  let arx, ary, asz;
-  const onScreen=malong<previewDepth;
-  if(onScreen){
-    arx=Math.max(W*0.16, Math.min(W*0.84, mx));
-    ary=Math.max(horizonY+W*0.02, Math.min(H-W*0.02, my));
-    asz=Math.max(18, Math.min(W*0.16, W*0.15*(40/(malong+40))));
-  } else {
-    arx=W/2; ary=Math.max(horizonY+W*0.03, horizonY+10);
-    asz=W*0.13;
-  }
-  const rot=Number.isFinite(ba)? (ba-fwdBearing) : 0;
-  const arr=`<g transform="translate(${arx.toFixed(1)},${ary.toFixed(1)}) rotate(${rot.toFixed(1)})">
-    <path d="M0 ${(-asz).toFixed(1)} L${(asz*0.85).toFixed(1)} ${(asz*0.55).toFixed(1)} L0 ${(asz*0.18).toFixed(1)} L${(-asz*0.85).toFixed(1)} ${(asz*0.55).toFixed(1)} Z" fill="#ffcc00" stroke="#000" stroke-width="${Math.max(1,asz*0.06).toFixed(1)}" stroke-linejoin="round"/>
-    <path d="M0 ${(-asz*0.5).toFixed(1)} L0 ${(-asz*2.2).toFixed(1)}" stroke="#ffcc00" stroke-width="${Math.max(2,asz*0.16).toFixed(1)}" stroke-linecap="round"/></g>`;
-
   roadSvg.innerHTML=
     `<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">`+
       `<stop offset="0" stop-color="#5f83b0"/><stop offset="1" stop-color="#2b3c60"/></linearGradient>`+
@@ -1447,8 +1483,7 @@ function renderRoadPreview(proj, userS, distToTurn, totalDist, nextIdx){
     `<polygon points="${hiPts}" fill="#2f9bff" opacity="0.9"/>`+
     branches+
     `<path d="${cl}" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2" stroke-dasharray="10 12" stroke-linecap="round"/>`+
-    `<circle cx="${(W/2).toFixed(1)}" cy="${(H-W*0.05).toFixed(1)}" r="${Math.max(8,W*0.04).toFixed(1)}" fill="#fff" stroke="#2f9bff" stroke-width="${Math.max(3,W*0.012).toFixed(1)}"/>`+
-    arr;
+    `<circle cx="${(W/2).toFixed(1)}" cy="${(H-W*0.05).toFixed(1)}" r="${Math.max(8,W*0.04).toFixed(1)}" fill="#fff" stroke="#2f9bff" stroke-width="${Math.max(3,W*0.012).toFixed(1)}"/>`;
 }
 
 function updateNavigation(){
@@ -1475,7 +1510,7 @@ function updateNavigation(){
   if(activeSegLine) activeSegLine.setLatLngs(sliceRoute(proj, maneuverS[next]));
   updateNavBar(routeSteps[next], distToTurn, remainTime, remainDist);
   rvEta.textContent=`ETA ${formatETA(remainTime)} • ${formatDistance(remainDist)} left`;
-  checkTTS(next, distToTurn, routeSteps[next]);
+  checkTTS(next, distToTurn, routeSteps[next], lastSpeed);
   renderRoadPreview(proj, userS, distToTurn, totalDist, next);
 
   if(remainDist<15){
