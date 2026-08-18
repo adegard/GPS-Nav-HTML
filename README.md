@@ -10,7 +10,7 @@ A single-file, offline-first **GPS navigation app** built entirely with HTML, CS
   - 🚗 **Car** or 🚶 **Walking** routing (OSRM + automatic Valhalla fallback when the OSRM servers are offline)
   - Route preference: ⭐ Best, ⚡ Fastest, 📏 Shortest
   - Automatic **rerouting** if you leave the route
-- **Full-screen 3D driving view - Driving Assistance** — pseudo-3D perspective road view with junctions, side roads and a turning arrow, plus ETA and distance-to-turn HUD and angle vs speed warning (car turn red if current speed is above max speed depending on turn angle)
+- **Full-screen 3D driving view - Driving Assistance** — pseudo-3D perspective road view with junctions, side roads and a turning arrow, plus ETA and distance-to-turn HUD assistant (car turn red if current speed is above max speed depending on turn angle), max speed warning. 
 - **Voice guidance** — spoken instructions at key distances:
   - 🔊 System voice (device TTS)
   - 📡 Online voice (Google Translate TTS — works even on de-Googled devices where system TTS is silent)
