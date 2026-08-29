@@ -2,7 +2,7 @@
 
 # GPS-Nav-HTML
 
-A single-file, offline-first **GPS navigation app** built entirely with HTML, CSS and JavaScript. No app store, no account, no tracking — just open `gps6.html` in any modern mobile browser (both from Mobile phone or computer laptop) and start navigating.
+A single-file, **GPS navigation app** built entirely with HTML, CSS and JavaScript. No app store, no account, no tracking — just open `gps6.html` in any modern mobile browser (both from Mobile phone or computer laptop) and start navigating.
 
 # Try it !
 
