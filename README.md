@@ -51,3 +51,7 @@ Just open the link https://adegard.github.io/GPS-Nav-HTML/gps6.html
 ## License
 
 OpenStreetMap data is © OpenStreetMap contributors (ODbL). The app itself is free to use and modify.
+
+---
+
+For an overview of all my other projects, see https://adegard.github.io/blog/
