@@ -6,7 +6,7 @@ A single-file, offline-first **GPS navigation app** built entirely with HTML, CS
 
 # Try it !
 
-Just open the link [(https://adegard.github.io/GPS-Nav-HTML/gps6.html)]https://adegard.github.io/GPS-Nav-HTML/gps6.html
+Just open the link https://adegard.github.io/GPS-Nav-HTML/gps6.html
 
 
 ## Features
