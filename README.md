@@ -4,6 +4,11 @@
 
 A single-file, offline-first **GPS navigation app** built entirely with HTML, CSS and JavaScript. No app store, no account, no tracking — just open `gps6.html` in any modern mobile browser (both from Mobile phone or computer laptop) and start navigating.
 
+# Try it !
+
+Just open [(https://adegard.github.io/GPS-Nav-HTML/gps6.html)](https://adegard.github.io/GPS-Nav-HTML/gps6.html)
+
+
 ## Features
 
 - **Live GPS tracking** — auto-starts on load, shows your position and heading on an OpenStreetMap map
